@@ -26,4 +26,7 @@ export class Product {
   //invertside
   @ManyToOne(() => Category)
   category: Category;
+
+  @Column({ type: 'int' })
+  categoryId: number;
 }
