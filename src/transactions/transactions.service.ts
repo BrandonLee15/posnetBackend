@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -21,32 +21,54 @@ export class TransactionsService {
   ) {}
 
   async create(createTransactionDto: CreateTransactionDto) {
-    const transaction = new Transaction();
-    transaction.total = createTransactionDto.total;
-    await this.transactionRepository.save(transaction);
+    await this.productRepository.manager.transaction(
+      async (transactionEntityManager) => {
+        const transaction = new Transaction();
+        const total = createTransactionDto.contents.reduce( 
+          (total, item) => total +(
+            item.quantity * item.price,
+          ) , 0)
+        transaction.total = createTransactionDto.total;
 
-    for (const contents of createTransactionDto.contents) {
-      const product = await this.productRepository.findOneBy({
-        id: contents.productId,
-      });
-      //nos aseguramos que el producto no sea null
-      if (!product) {
-        throw new Error(
-          `el Producto con id ${contents.productId} no fue encontrado`,
-        );
-      }
-      if (contents.quantity > product.inventory) {
-        throw new BadRequestException(
-          `el Producto con id ${contents.productId} no tiene suficiente inventario para esta venta, inventario actual: ${product.inventory + contents.quantity}, cantidad solicitada: ${contents.quantity}`,
-        );
-      }
-      product.inventory -= contents.quantity;
-      await this.transactionContentsRepository.save({
-        ...contents,
-        transaction: transaction,
-        product: product,
-      });
-    }
+        for (const contents of createTransactionDto.contents) {
+          const product = await transactionEntityManager.findOneBy(Product, {
+            id: contents.productId,
+          });
+
+          const errors: string[] = [];
+
+          if (!product) {
+            errors.push(
+              `el Producto con id ${contents.productId} no fue encontrado`,
+            );
+            throw new NotFoundException(errors);
+          }
+
+          //nos aseguramos que el producto no sea null
+          if (!product) {
+            throw new Error(
+              `el Producto con id ${contents.productId} no fue encontrado`,
+            );
+          }
+          if (contents.quantity > product.inventory) {
+            errors.push(`el Producto con id ${contents.productId} 
+              no tiene suficiente inventario para esta venta`);
+            throw new BadRequestException(errors);
+          }
+          product.inventory -= contents.quantity;
+          //crear instancia de transaction contents
+          const transactionContents = new TransactionContents();
+          transactionContents.price = contents.price;
+          transactionContents.product = product;
+          transactionContents.quantity = contents.quantity;
+          transactionContents.transaction = transaction;
+
+          await transactionEntityManager.save(transaction);
+          await transactionEntityManager.save(transactionContents);
+        }
+      },
+    );
+
     return 'venta almacenada correctamente';
   }
 
