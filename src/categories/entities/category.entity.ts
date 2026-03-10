@@ -1,5 +1,5 @@
 //aqui es todo el mapeo o estructura de la base de datos
-import { Product } from 'src/products/entities/product.entity';
+import { Product } from '../../products/entities/product.entity';
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity()
