@@ -1,22 +1,31 @@
+//esta parter del codigo se encarga de manejar las peticiones http(osea las urls)
 import {
   Controller,
   Get,
   Post,
   Body,
-  Patch,
   Param,
   Delete,
   Query,
+  UseInterceptors,
+  BadRequestException,
+  UploadedFile,
+  Put,
 } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { GetProductsQueryDto } from './dto/get-product.dto';
 import { IdValidationPipe } from '../common/pipes/id-validation/id-validation.pipe';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { UploadImageService } from 'src/upload-image/upload-image.service';
 
 @Controller('products')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(
+    private readonly productsService: ProductsService,
+    private readonly uploadImageService: UploadImageService,
+  ) {}
 
   @Post()
   create(@Body() createProductDto: CreateProductDto) {
@@ -36,7 +45,7 @@ export class ProductsController {
     return this.productsService.findOne(+id);
   }
 
-  @Patch(':id')
+  @Put(':id')
   update(
     @Param('id', IdValidationPipe) id: string,
     @Body() updateProductDto: UpdateProductDto,
@@ -47,5 +56,15 @@ export class ProductsController {
   @Delete(':id')
   remove(@Param('id', IdValidationPipe) id: string) {
     return this.productsService.remove(+id);
+  }
+
+  @Post('upload-image')
+  @UseInterceptors(FileInterceptor('image'))
+  uploadImage(@UploadedFile() image: Express.Multer.File) {
+    if (!image) {
+      throw new BadRequestException('No image file provided');
+    }
+
+    return this.uploadImageService.uploadImage(image);
   }
 }
